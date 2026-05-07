@@ -40,14 +40,22 @@
     --convert-arith-to-llvm='index-bitwidth=64'  \
     -convert-for-index-to-i64  \
     -cse -canonicalize -cse  \
+    -parameterize-k-size \
+    -cse -canonicalize -cse \
     -lower-ftm-to-mt  \
     -cse -canonicalize -cse  \
     -reduce-80bit-instructions  \
     -cse -canonicalize -cse  \
     -generate-condition-and-labels-for-loops  \
     -cse -canonicalize -cse  \
+    -matmul-in-place-accumulation \
+    -mt-dead-code-elimination \
+    -register-reuse-optimization \
+    -mt-dead-code-elimination \
+    -merge-memory-access \
+    -mt-dead-code-elimination \
     -assign-register-ids \
-    -instruction-scheduling-and-packing  \
+    -instruction-scheduling-and-packing='output-file=matmul_micro_kernel.c'  \
     -cse -canonicalize -cse  \
     > ../build/debug_output.log 2>&1
 

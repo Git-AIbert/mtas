@@ -14,15 +14,15 @@ void matmul_micro_kernel(float* src_a, lvector float* src_b, lvector float* dst_
 "    SMVAGA.M1         %1, AR1                     \t\n"
 "|   SLDW              *+AR10[256], R27            \t\n"
 // [4]
-"    SMOVI.M1          1024, R30                   \t\n"
+"    SMOVI.M1          1024, R42                   \t\n"
 "|   SLDW              *+AR10[512], R26            \t\n"
-"|   VLDDW             *AR0, VR43:VR42             \t\n"
 "|   VLDDW             *+AR0[16], VR41:VR40        \t\n"
+"|   VLDDW             *AR0, VR43:VR42             \t\n"
 // [5]
-"    SMVAGA.M1         R30, OR8                    \t\n"
+"    SMVAGA.M1         R42, OR8                    \t\n"
 "|   SMOVI.M2          1280, R31                   \t\n"
-"|   VLDDW             *+AR1[16], VR15:VR14        \t\n"
 "|   VLDDW             *AR1, VR17:VR16             \t\n"
+"|   VLDDW             *+AR1[16], VR15:VR14        \t\n"
 // [6]
 "    SMVAGA.M1         R31, OR9                    \t\n"
 "|   SLDW              *+AR10[768], R9             \t\n"
@@ -43,16 +43,16 @@ void matmul_micro_kernel(float* src_a, lvector float* src_b, lvector float* dst_
 "|   VLDDW             *+AR0[128], VR27:VR26       \t\n"
 // [11]
 "    SVBCAST.M1        R26, VR11                   \t\n"
-"|   VLDDW             *+AR0[160], VR23:VR22       \t\n"
 "|   VLDDW             *+AR0[144], VR25:VR24       \t\n"
+"|   VLDDW             *+AR0[160], VR23:VR22       \t\n"
 // [12]
-"    SMOVI.M1          0, R44                      \t\n"
-"|   SMOVI.M2          2, R42                      \t\n"
+"    SMOVI.M1          2, R30                      \t\n"
+"|   SMOV.M2           %3, R29                     \t\n"
 "|   VLDDW             *+AR0[176], VR21:VR20       \t\n"
 // [13]
 "    SVBCAST.M1        R9, VR9                     \t\n"
-"|   SMOVI.M2          512, R43                    \t\n"
-"|   SMOVI             8, R29                      \t\n"
+"|   SMOVI.M2          8, R43                      \t\n"
+"|   SMOVI             0, R44                      \t\n"
 "|   VBALE2            VR19, VR19, VR18            \t\n"
 "|   VLDDW             *+AR1[32], VR3:VR2          \t\n"
 "|   VLDDW             *+AR1[48], VR1:VR0          \t\n"
@@ -70,17 +70,17 @@ void matmul_micro_kernel(float* src_a, lvector float* src_b, lvector float* dst_
 "|   VFMULAS32.M3      VR12, VR17, VR39, VR39      \t\n"
 "|   VBALE2            VR11, VR11, VR10            \t\n"
 // [2]
-"    SADDA             R29, AR10, AR10             \t\n"
-"|   VFMULAS32.M1      VR12, VR15, VR37, VR37      \t\n"
-"|   VFMULAS32.M2      VR12, VR14, VR36, VR36      \t\n"
-"|   VFMULAS32.M3      VR10, VR16, VR34, VR34      \t\n"
+"    SADDA             R43, AR10, AR10             \t\n"
+"|   VFMULAS32.M1      VR10, VR16, VR34, VR34      \t\n"
+"|   VFMULAS32.M2      VR12, VR15, VR37, VR37      \t\n"
+"|   VFMULAS32.M3      VR12, VR14, VR36, VR36      \t\n"
 // [3]
 "    VFMULAS32.M1      VR10, VR17, VR35, VR35      \t\n"
 "|   VFMULAS32.M2      VR10, VR14, VR32, VR32      \t\n"
 "|   VFMULAS32.M3      VR10, VR15, VR33, VR33      \t\n"
 "|   VBALE2            VR9, VR9, VR8               \t\n"
 // [4]
-"    SADDA             R30, AR1, AR1               \t\n"
+"    SADDA             R42, AR1, AR1               \t\n"
 "|   SLDW              *AR10, R28                  \t\n"
 "|   VFMULAS32.M1      VR8, VR16, VR30, VR30       \t\n"
 "|   VFMULAS32.M2      VR8, VR17, VR31, VR31       \t\n"
@@ -98,15 +98,15 @@ void matmul_micro_kernel(float* src_a, lvector float* src_b, lvector float* dst_
 "|   VFMULAS32.M2      VR6, VR15, VR25, VR25       \t\n"
 "|   VFMULAS32.M3      VR4, VR16, VR22, VR22       \t\n"
 // [7]
-"    SADD.M1           R44, R42, R44               \t\n"
+"    SADD.M1           R44, R30, R44               \t\n"
 "|   VFMULAS32.M1      VR4, VR17, VR23, VR23       \t\n"
 "|   VFMULAS32.M2      VR4, VR14, VR20, VR20       \t\n"
 "|   VFMULAS32.M3      VR4, VR15, VR21, VR21       \t\n"
 "|   VBALE2h           VR19, VR19, VR18            \t\n"
-"|   VLDDW             *+AR1[16], VR15:VR14        \t\n"
 "|   VLDDW             *AR1, VR17:VR16             \t\n"
+"|   VLDDW             *+AR1[16], VR15:VR14        \t\n"
 // [8]
-"    SLT               R44, R43, R0                \t\n"
+"    SLT               R44, R29, R0                \t\n"
 "|   SLDW              *+AR10[768], R9             \t\n"
 "|   VFMULAS32.M1      VR18, VR2, VR42, VR42       \t\n"
 "|   VFMULAS32.M2      VR18, VR3, VR43, VR43       \t\n"
@@ -121,9 +121,9 @@ void matmul_micro_kernel(float* src_a, lvector float* src_b, lvector float* dst_
 "|   VBALE2h           VR11, VR11, VR10            \t\n"
 // [10]
 "    SLDW              *+AR10[OR9], R7             \t\n"
-"|   VFMULAS32.M1      VR12, VR1, VR37, VR37       \t\n"
-"|   VFMULAS32.M2      VR10, VR2, VR34, VR34       \t\n"
-"|   VFMULAS32.M3      VR12, VR0, VR36, VR36       \t\n"
+"|   VFMULAS32.M1      VR12, VR0, VR36, VR36       \t\n"
+"|   VFMULAS32.M2      VR12, VR1, VR37, VR37       \t\n"
+"|   VFMULAS32.M3      VR10, VR2, VR34, VR34       \t\n"
 // [11]
 "    SVBCAST.M1        R28, VR19                   \t\n"
 "|   VFMULAS32.M1      VR10, VR3, VR35, VR35       \t\n"
@@ -156,8 +156,8 @@ void matmul_micro_kernel(float* src_a, lvector float* src_b, lvector float* dst_
 "|   VLDDW             *+AR1[48], VR1:VR0          \t\n"
 // [0]
 "    SBR               R63                         \t\n"
-"|   VSTDW             VR39:VR38, *+AR0[32]        \t\n"
 "|   VSTDW             VR41:VR40, *+AR0[16]        \t\n"
+"|   VSTDW             VR39:VR38, *+AR0[32]        \t\n"
 // [1]
 "    VSTDW             VR43:VR42, *AR0             \t\n"
 "|   VSTDW             VR37:VR36, *+AR0[48]        \t\n"
@@ -166,9 +166,9 @@ void matmul_micro_kernel(float* src_a, lvector float* src_b, lvector float* dst_
 "|   VSTDW             VR33:VR32, *+AR0[80]        \t\n"
 // [3]
 "    VSTDW             VR31:VR30, *+AR0[96]        \t\n"
-"|   VSTDW             VR27:VR26, *+AR0[128]       \t\n"
+"|   VSTDW             VR29:VR28, *+AR0[112]       \t\n"
 // [4]
-"    VSTDW             VR29:VR28, *+AR0[112]       \t\n"
+"    VSTDW             VR27:VR26, *+AR0[128]       \t\n"
 "|   VSTDW             VR25:VR24, *+AR0[144]       \t\n"
 // [5]
 "    VSTDW             VR21:VR20, *+AR0[176]       \t\n"
