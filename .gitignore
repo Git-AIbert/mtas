@@ -33,3 +33,6 @@ build/
 *.exe
 *.out
 *.app
+# Generated demo outputs
+demos/matmul_micro_kernel.c
+demos/matmul_micro_kernel.mlir
