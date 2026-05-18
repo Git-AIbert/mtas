@@ -30,6 +30,52 @@ using namespace ftm;
 
 namespace {
 
+enum class MatmulLoopDim {
+  None,
+  M,
+  N,
+};
+
+MatmulLoopDim getMatmulLoopDim(int64_t loopStep) {
+  if(loopStep == 32)
+    return MatmulLoopDim::N;
+  if(loopStep == 1)
+    return MatmulLoopDim::M;
+  return MatmulLoopDim::None;
+}
+
+void annotateMatmulCoordinates(
+    Operation *rootOp, scf::ForOp loopOp, int64_t currentIndex,
+    int64_t loopStep, OpBuilder &builder) {
+  auto loopDim = getMatmulLoopDim(loopStep);
+  IntegerAttr kAttr;
+  if(auto attr = dyn_cast_if_present<mlir::ftm::UnrollSegmentAttr>(
+        loopOp->getAttr(ftm::UnrollSegmentAttr::name))) {
+    kAttr = builder.getI32IntegerAttr(attr.getSegmentId());
+  }
+
+  rootOp->walk([&](ftm::FMAOp fmaOp) {
+    if(loopDim == MatmulLoopDim::M) {
+      fmaOp->setAttr("matmul.m", builder.getI32IntegerAttr(currentIndex));
+    } else if(loopDim == MatmulLoopDim::N) {
+      fmaOp->setAttr("matmul.n", builder.getI32IntegerAttr(currentIndex / 32));
+    }
+    if(kAttr)
+      fmaOp->setAttr("matmul.k", kAttr);
+  });
+}
+
+void defaultMissingMatmulCoordinates(func::FuncOp funcOp) {
+  OpBuilder builder(funcOp.getContext());
+  funcOp.walk([&](ftm::FMAOp fmaOp) {
+    if(!fmaOp->hasAttr("matmul.m"))
+      fmaOp->setAttr("matmul.m", builder.getI32IntegerAttr(0));
+    if(!fmaOp->hasAttr("matmul.n"))
+      fmaOp->setAttr("matmul.n", builder.getI32IntegerAttr(0));
+    return WalkResult::advance();
+  });
+}
+
 bool applyLoopFolding(scf::ForOp loopOp) {
   auto loc = loopOp.getLoc();
   auto ctx = loopOp.getContext();
@@ -73,28 +119,7 @@ bool applyLoopFolding(scf::ForOp loopOp) {
       if(isa<scf::YieldOp>(op))
         return WalkResult::interrupt();
       auto newOp = builder.clone(*op, mapping);
-      // 检查是否是FMA操作
-      if (auto fmaOp = dyn_cast<ftm::FMAOp>(newOp)) {
-        // 检查是否有"matmul.n"属性
-        if (fmaOp->hasAttr("matmul.n")) {
-          // 如果已有n属性，说明此循环是m循环
-          fmaOp->setAttr("matmul.m", builder.getI32IntegerAttr(currentIndex));
-        } else {
-          // 如果没有n属性，说明此循环是n循环
-          fmaOp->setAttr("matmul.m", builder.getI32IntegerAttr(0));
-          fmaOp->setAttr("matmul.n", builder.getI32IntegerAttr(currentIndex / 32));
-        }
-        // 判断当前loopOp是否有ftm.unroll_segment属性
-        if(loopOp->hasAttr("ftm.unroll_segment")){
-          // 获取属性
-          if (auto ftmAttr = dyn_cast<mlir::ftm::UnrollSegmentAttr>(
-              loopOp->getAttr("ftm.unroll_segment"))) {
-            // 获取segmentId参数值
-            auto kValue = ftmAttr.getSegmentId() ? ftmAttr.getSegmentId() : 0;
-            fmaOp->setAttr("matmul.k", builder.getI32IntegerAttr(kValue));
-          }
-        }
-      }
+      annotateMatmulCoordinates(newOp, loopOp, currentIndex, loopStep, builder);
       return WalkResult::advance();
     });
   }
@@ -386,6 +411,8 @@ public:
         pm.run(module);
       }
     }
+
+    defaultMissingMatmulCoordinates(funcOp);
   }
 };
 } // namespace mlir

@@ -76,6 +76,44 @@ memref::SubViewOp getOffsetSubviewFrom(
   return nullptr;
 }
 
+memref::SubViewOp getOrCreateSubviewForOperand(
+    Value val, Location loc, Operation *insertionPoint, OpBuilder &builder,
+    llvm::StringRef opName) {
+  if(auto defOp = val.getDefiningOp()) {
+    if(auto subview = dyn_cast<memref::SubViewOp>(defOp))
+      return subview;
+  }
+
+  auto memrefType = val.getType().dyn_cast<MemRefType>();
+  if(!memrefType) {
+    llvm::errs() << opName << " operands must be memrefs or memref.subview results";
+    return nullptr;
+  }
+
+  OpBuilder::InsertionGuard guard(builder);
+  builder.setInsertionPoint(insertionPoint);
+
+  SmallVector<Value> offsets;
+  SmallVector<Value> sizes;
+  SmallVector<Value> strides;
+  offsets.reserve(memrefType.getRank());
+  sizes.reserve(memrefType.getRank());
+  strides.reserve(memrefType.getRank());
+
+  for(int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
+    offsets.push_back(builder.create<arith::ConstantIndexOp>(loc, 0));
+    strides.push_back(builder.create<arith::ConstantIndexOp>(loc, 1));
+    if(memrefType.isDynamicDim(dim)) {
+      sizes.push_back(builder.create<memref::DimOp>(loc, val, dim));
+    } else {
+      sizes.push_back(builder.create<arith::ConstantIndexOp>(
+          loc, memrefType.getDimSize(dim)));
+    }
+  }
+
+  return builder.create<memref::SubViewOp>(loc, val, offsets, sizes, strides);
+}
+
 bool implMatmulLowering(Operation* op) {
   auto matmulOp = cast<linalg::MatmulOp>(op);
   auto loc = matmulOp.getLoc();
@@ -100,16 +138,12 @@ bool implMatmulLowering(Operation* op) {
   SmallVector<Value, 3> subMats(3);
   SmallVector<memref::SubViewOp, 3> subviews(3);
 
+  builder.setInsertionPoint(matmulOp);
   for(auto [idx, operand] : llvm::enumerate(matmulOp.getOperands())) {
     subMats[idx] = matmulOp.getOperand(idx);
-    auto defOp = subMats[idx].getDefiningOp();
-    if(!defOp) {
-      llvm::errs() << "matmul operands must be the result of memref.subview";
-      return false;
-    }
-    subviews[idx] = dyn_cast<memref::SubViewOp>(defOp);
+    subviews[idx] = getOrCreateSubviewForOperand(
+        subMats[idx], loc, matmulOp, builder, "matmul");
     if(!subviews[idx]) {
-      llvm::errs() << "matmul operands must be the result of memref.subview";
       return false;
     }
   }
@@ -142,6 +176,7 @@ bool implMatmulLowering(Operation* op) {
 
   auto vectorFMA = builder.create<ftm::FMAOp>(loc,
       elem1024BitTy, fmaOperands[0], fmaOperands[1], fmaOperands[2]);
+  vectorFMA->setAttr("matmul.k", builder.getI32IntegerAttr(unrollSegmentId));
 
   auto storeValue = builder.create<ftm::MemRefStoreOp>(loc, vectorFMA, subviews[2]);
   storeValue->setAttr(ftm::MemLevelAttr::name,
@@ -169,16 +204,12 @@ bool implAddOpLowering(Operation *op) {
   SmallVector<Value, 3> subMats(3);
   SmallVector<memref::SubViewOp, 3> subviews(3);
 
+  builder.setInsertionPoint(addOp);
   for(auto [idx, operand] : llvm::enumerate(addOp.getOperands())) {
     subMats[idx] = addOp.getOperand(idx);
-    auto defOp = subMats[idx].getDefiningOp();
-    if(!defOp) {
-      llvm::errs() << "matmul operands must be the result of memref.subview";
-      return false;
-    }
-    subviews[idx] = dyn_cast<memref::SubViewOp>(defOp);
+    subviews[idx] = getOrCreateSubviewForOperand(
+        subMats[idx], loc, addOp, builder, "add");
     if(!subviews[idx]) {
-      llvm::errs() << "matmul operands must be the result of memref.subview";
       return false;
     }
   }
@@ -267,17 +298,11 @@ bool implFillOpLowering(Operation *op) {
   }
 
   Value dstMat = fillOp.getOutputs()[0];
-  memref::SubViewOp subview;
-  if(auto defDstOp = dstMat.getDefiningOp()) {
-    if(!defDstOp) {
-      llvm::errs() << "fill destiny must be the result of memref.subview";
-      return false;
-    }
-    subview = dyn_cast<memref::SubViewOp>(defDstOp);
-    if(!subview) {
-      llvm::errs() << "matmul operands must be the result of memref.subview";
-      return false;
-    }
+  builder.setInsertionPoint(fillOp);
+  memref::SubViewOp subview = getOrCreateSubviewForOperand(
+      dstMat, loc, fillOp, builder, "fill");
+  if(!subview) {
+    return false;
   }
 
   builder.setInsertionPoint(fillOp);

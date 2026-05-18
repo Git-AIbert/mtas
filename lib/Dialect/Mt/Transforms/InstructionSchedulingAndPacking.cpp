@@ -72,21 +72,25 @@ private:
     return targetForOp;
   }
 
+  int getIntAttrOrZero(Operation *op, StringRef name) {
+    if(auto attr = op->getAttrOfType<IntegerAttr>(name))
+      return attr.getInt();
+    return 0;
+  }
+
   std::tuple<int, int, int> getMatrixDimensions(scf::ForOp forOp) {
     int k_size = -1, m_size = -1, n_size = -1;
     forOp.walk([&](mt::Vfmulas32Op vfmulas32Op) {
-      if (vfmulas32Op->hasAttr("matmul.k")){
-        auto k = vfmulas32Op->getAttrOfType<IntegerAttr>("matmul.k").getInt();
-        if(k > k_size) k_size = k;
-      }
-      if (vfmulas32Op->hasAttr("matmul.m")){
-        auto m = vfmulas32Op->getAttrOfType<IntegerAttr>("matmul.m").getInt();
-        if(m > m_size) m_size = m;
-      }
-      if (vfmulas32Op->hasAttr("matmul.n")){
-        auto n = vfmulas32Op->getAttrOfType<IntegerAttr>("matmul.n").getInt();
-        if(n > n_size) n_size = n;
-      }
+      auto op = vfmulas32Op.getOperation();
+      auto k = getIntAttrOrZero(op, "matmul.k");
+      auto m = getIntAttrOrZero(op, "matmul.m");
+      auto n = getIntAttrOrZero(op, "matmul.n");
+      if(k > k_size)
+        k_size = k;
+      if(m > m_size)
+        m_size = m;
+      if(n > n_size)
+        n_size = n;
     });
     return {k_size + 1, m_size + 1, n_size + 1};
   }
@@ -123,7 +127,7 @@ private:
     int maxK = 0;
     for(auto op : toScheduleOps){
       if (auto vfmulas32Op = dyn_cast<mt::Vfmulas32Op>(op.getOperation())) {
-        int k = vfmulas32Op->getAttrOfType<IntegerAttr>("matmul.k").getInt();
+        int k = getIntAttrOrZero(vfmulas32Op, "matmul.k");
         if(k > maxK)
           maxK = k;
       }
@@ -137,9 +141,9 @@ private:
       bool success;
       int cycle;
       if (auto vfmulas32Op = dyn_cast<mt::Vfmulas32Op>(op.getOperation())) {
-        int k = vfmulas32Op->getAttrOfType<IntegerAttr>("matmul.k").getInt();
-        int m = vfmulas32Op->getAttrOfType<IntegerAttr>("matmul.m").getInt();
-        int n = vfmulas32Op->getAttrOfType<IntegerAttr>("matmul.n").getInt();
+        int k = getIntAttrOrZero(vfmulas32Op, "matmul.k");
+        int m = getIntAttrOrZero(vfmulas32Op, "matmul.m");
+        int n = getIntAttrOrZero(vfmulas32Op, "matmul.n");
         // 根据n_size的大小决定放置逻辑
         if (n_size <= 3) {
           // 如果n_size小于等于3
